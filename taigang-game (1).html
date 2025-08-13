@@ -1,0 +1,1102 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>抬杠大战 - 在线实时对战</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.1/peerjs.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: white;
+        }
+
+        .container {
+            width: 90%;
+            max-width: 800px;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        }
+
+        h1 {
+            text-align: center;
+            font-size: 3em;
+            margin-bottom: 20px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+            animation: glow 2s ease-in-out infinite;
+        }
+
+        @keyframes glow {
+            0%, 100% { text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3), 0 0 20px rgba(255, 255, 255, 0.5); }
+            50% { text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3), 0 0 30px rgba(255, 255, 255, 0.8); }
+        }
+
+        .lobby {
+            text-align: center;
+            padding: 40px;
+        }
+
+        .lobby h2 {
+            margin-bottom: 30px;
+            font-size: 1.8em;
+        }
+
+        .mode-selection {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            margin-bottom: 30px;
+        }
+
+        .mode-button {
+            padding: 20px 30px;
+            font-size: 1.2em;
+            border: 2px solid white;
+            border-radius: 15px;
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .mode-button:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: translateY(-3px);
+        }
+
+        .mode-button.active {
+            background: rgba(255, 255, 255, 0.3);
+            box-shadow: 0 5px 20px rgba(255, 255, 255, 0.3);
+        }
+
+        .player-name-input, .room-input {
+            padding: 15px 25px;
+            font-size: 1.2em;
+            border: none;
+            border-radius: 50px;
+            background: rgba(255, 255, 255, 0.9);
+            color: #333;
+            margin-bottom: 20px;
+            width: 300px;
+            max-width: 100%;
+            transition: all 0.3s;
+        }
+
+        .player-name-input:focus, .room-input:focus {
+            outline: none;
+            box-shadow: 0 0 20px rgba(255, 255, 255, 0.5);
+            transform: scale(1.05);
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .action-button {
+            padding: 15px 40px;
+            font-size: 1.3em;
+            border: none;
+            border-radius: 50px;
+            background: linear-gradient(45deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+            cursor: pointer;
+            transition: all 0.3s;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+            font-weight: bold;
+        }
+
+        .action-button:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 15px 40px rgba(0, 0, 0, 0.4);
+        }
+
+        .action-button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .room-info {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 20px;
+            border-radius: 15px;
+            margin: 20px 0;
+        }
+
+        .room-id {
+            font-size: 2em;
+            font-weight: bold;
+            color: #ffd700;
+            text-align: center;
+            margin: 10px 0;
+            letter-spacing: 5px;
+            user-select: all;
+            cursor: pointer;
+        }
+
+        .copy-hint {
+            text-align: center;
+            font-size: 0.9em;
+            opacity: 0.8;
+        }
+
+        .status-message {
+            text-align: center;
+            font-size: 1.2em;
+            margin: 20px 0;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+        }
+
+        .waiting {
+            text-align: center;
+            padding: 40px;
+        }
+
+        .spinner {
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-top: 4px solid white;
+            border-radius: 50%;
+            width: 60px;
+            height: 60px;
+            animation: spin 1s linear infinite;
+            margin: 30px auto;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .game-area {
+            display: none;
+            position: relative;
+        }
+
+        .players-info {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 30px;
+        }
+
+        .player-info {
+            text-align: center;
+            flex: 1;
+        }
+
+        .player-info h3 {
+            font-size: 1.5em;
+            margin-bottom: 10px;
+        }
+
+        .player-info.current-player {
+            color: #ffd700;
+        }
+
+        .player-score {
+            font-size: 2.5em;
+            font-weight: bold;
+            color: #ffd700;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        .bar-container {
+            height: 400px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 20px;
+            position: relative;
+            overflow: hidden;
+            margin-bottom: 30px;
+            display: flex;
+            align-items: flex-end;
+            justify-content: space-around;
+            padding: 20px;
+        }
+
+        .bar {
+            width: 120px;
+            background: linear-gradient(to top, #ffd700, #ffed4e);
+            border-radius: 10px 10px 0 0;
+            transition: height 0.3s ease;
+            position: relative;
+            box-shadow: 0 0 20px rgba(255, 215, 0, 0.5);
+        }
+
+        .bar::before {
+            content: '';
+            position: absolute;
+            top: -20px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 140px;
+            height: 20px;
+            background: #8b4513;
+            border-radius: 10px;
+            box-shadow: 0 5px 10px rgba(0, 0, 0, 0.3);
+        }
+
+        .player1-bar {
+            background: linear-gradient(to top, #ff6b6b, #ff8e53);
+        }
+
+        .player2-bar {
+            background: linear-gradient(to top, #4ecdc4, #44a08d);
+        }
+
+        .controls {
+            display: flex;
+            justify-content: center;
+            margin-top: 20px;
+        }
+
+        .lift-button {
+            padding: 30px 80px;
+            font-size: 2em;
+            border: none;
+            border-radius: 15px;
+            cursor: pointer;
+            transition: all 0.1s;
+            font-weight: bold;
+            position: relative;
+            overflow: hidden;
+            background: linear-gradient(45deg, #ff6b6b, #ff8e53);
+            color: white;
+            box-shadow: 0 10px 30px rgba(255, 107, 107, 0.3);
+        }
+
+        .lift-button::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 0;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.5);
+            transform: translate(-50%, -50%);
+            transition: width 0.6s, height 0.6s;
+        }
+
+        .lift-button:active::after {
+            width: 300px;
+            height: 300px;
+        }
+
+        .lift-button:active {
+            transform: scale(0.95);
+        }
+
+        .lift-button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .countdown {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 8em;
+            font-weight: bold;
+            color: white;
+            text-shadow: 0 0 30px rgba(255, 255, 255, 0.8);
+            animation: pulse 1s ease-in-out;
+            z-index: 10;
+        }
+
+        @keyframes pulse {
+            0% { transform: translate(-50%, -50%) scale(0.5); opacity: 0; }
+            50% { transform: translate(-50%, -50%) scale(1.2); }
+            100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+        }
+
+        .game-over {
+            display: none;
+            text-align: center;
+            padding: 40px;
+            background: rgba(0, 0, 0, 0.8);
+            border-radius: 20px;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 20;
+            min-width: 400px;
+        }
+
+        .game-over h2 {
+            font-size: 3em;
+            margin-bottom: 20px;
+            color: #ffd700;
+        }
+
+        .restart-button {
+            padding: 15px 40px;
+            font-size: 1.3em;
+            border: none;
+            border-radius: 50px;
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-top: 20px;
+        }
+
+        .restart-button:hover {
+            transform: scale(1.1);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+        }
+
+        .timer {
+            text-align: center;
+            font-size: 2em;
+            margin-bottom: 20px;
+            font-weight: bold;
+        }
+
+        .connection-status {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            padding: 5px 15px;
+            background: rgba(0, 0, 0, 0.5);
+            border-radius: 20px;
+            font-size: 0.9em;
+        }
+
+        .status-dot {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 5px;
+            background: #4caf50;
+            animation: blink 2s infinite;
+        }
+
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+
+        .error-message {
+            background: rgba(255, 0, 0, 0.2);
+            border: 2px solid #ff6b6b;
+            padding: 15px;
+            border-radius: 10px;
+            margin: 20px 0;
+            text-align: center;
+        }
+
+        @media (max-width: 600px) {
+            h1 { font-size: 2em; }
+            .lift-button { padding: 20px 40px; font-size: 1.5em; }
+            .bar { width: 80px; }
+            .game-over { min-width: 90%; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🏋️ 抬杠大战 🏋️</h1>
+        
+        <div class="lobby" id="lobby">
+            <h2>选择游戏模式</h2>
+            
+            <div class="mode-selection">
+                <button class="mode-button active" id="onlineMode">在线对战</button>
+                <button class="mode-button" id="aiMode">人机对战</button>
+            </div>
+
+            <div id="onlineSection">
+                <input type="text" class="player-name-input" id="playerName" placeholder="输入你的名字" maxlength="10">
+                
+                <div class="action-buttons">
+                    <button class="action-button" id="createRoomBtn">创建房间</button>
+                    <button class="action-button" id="joinRoomBtn">加入房间</button>
+                </div>
+
+                <div id="joinSection" style="display: none; margin-top: 20px;">
+                    <input type="text" class="room-input" id="roomIdInput" placeholder="输入房间号" maxlength="20">
+                    <br>
+                    <button class="action-button" id="confirmJoinBtn">确认加入</button>
+                </div>
+            </div>
+
+            <div id="aiSection" style="display: none;">
+                <input type="text" class="player-name-input" id="aiPlayerName" placeholder="输入你的名字" maxlength="10">
+                <br>
+                <input type="text" class="player-name-input" id="aiOpponentName" placeholder="输入对手名字（可选）" maxlength="10" style="margin-top: -5px;">
+                <br>
+                <button class="action-button" id="startAiBtn">开始游戏</button>
+            </div>
+        </div>
+
+        <div class="waiting" id="waiting" style="display: none;">
+            <h2 id="waitingTitle">等待对手加入...</h2>
+            <div class="room-info">
+                <p>房间号（点击复制）：</p>
+                <div class="room-id" id="roomIdDisplay"></div>
+                <p class="copy-hint">分享给好友一起对战！</p>
+            </div>
+            <div class="spinner"></div>
+            <div class="status-message" id="statusMessage">已创建房间，等待玩家加入...</div>
+        </div>
+
+        <div class="game-area" id="gameArea">
+            <div class="connection-status">
+                <span class="status-dot"></span>
+                <span id="connectionText">已连接</span>
+            </div>
+
+            <div class="timer" id="timer">剩余时间: 30秒</div>
+            
+            <div class="players-info">
+                <div class="player-info" id="player1Info">
+                    <h3 id="player1Name">玩家1</h3>
+                    <div class="player-score" id="player1Score">0</div>
+                </div>
+                <div class="player-info" id="player2Info">
+                    <h3 id="player2Name">玩家2</h3>
+                    <div class="player-score" id="player2Score">0</div>
+                </div>
+            </div>
+
+            <div class="bar-container">
+                <div class="countdown" id="countdown"></div>
+                <div class="bar player1-bar" id="player1Bar" style="height: 10px;"></div>
+                <div class="bar player2-bar" id="player2Bar" style="height: 10px;"></div>
+            </div>
+
+            <div class="controls">
+                <button class="lift-button" id="liftButton" disabled>
+                    点击抬杠！<br>
+                    <small>(空格键)</small>
+                </button>
+            </div>
+
+            <div class="game-over" id="gameOver">
+                <h2 id="winnerText">游戏结束！</h2>
+                <p id="finalScore"></p>
+                <button class="restart-button" id="restartButton">返回大厅</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        class TaigangOnlineGame {
+            constructor() {
+                this.peer = null;
+                this.conn = null;
+                this.isHost = false;
+                this.roomId = '';
+                this.playerName = '';
+                this.opponentName = '';
+                this.myScore = 0;
+                this.opponentScore = 0;
+                this.gameActive = false;
+                this.timeLeft = 30;
+                this.timerInterval = null;
+                this.maxBarHeight = 350;
+                this.gameMode = 'online'; // 'online' or 'ai'
+                this.aiInterval = null; // 存储AI的interval
+                
+                this.initElements();
+                this.initEvents();
+            }
+
+            initElements() {
+                this.elements = {
+                    lobby: document.getElementById('lobby'),
+                    waiting: document.getElementById('waiting'),
+                    gameArea: document.getElementById('gameArea'),
+                    gameOver: document.getElementById('gameOver'),
+                    
+                    // Mode selection
+                    onlineMode: document.getElementById('onlineMode'),
+                    aiMode: document.getElementById('aiMode'),
+                    onlineSection: document.getElementById('onlineSection'),
+                    aiSection: document.getElementById('aiSection'),
+                    
+                    // Online elements
+                    playerNameInput: document.getElementById('playerName'),
+                    createRoomBtn: document.getElementById('createRoomBtn'),
+                    joinRoomBtn: document.getElementById('joinRoomBtn'),
+                    joinSection: document.getElementById('joinSection'),
+                    roomIdInput: document.getElementById('roomIdInput'),
+                    confirmJoinBtn: document.getElementById('confirmJoinBtn'),
+                    roomIdDisplay: document.getElementById('roomIdDisplay'),
+                    statusMessage: document.getElementById('statusMessage'),
+                    waitingTitle: document.getElementById('waitingTitle'),
+                    connectionText: document.getElementById('connectionText'),
+                    
+                    // AI elements
+                    aiPlayerName: document.getElementById('aiPlayerName'),
+                    aiOpponentName: document.getElementById('aiOpponentName'),
+                    startAiBtn: document.getElementById('startAiBtn'),
+                    
+                    // Game elements
+                    liftButton: document.getElementById('liftButton'),
+                    player1Bar: document.getElementById('player1Bar'),
+                    player2Bar: document.getElementById('player2Bar'),
+                    player1Score: document.getElementById('player1Score'),
+                    player2Score: document.getElementById('player2Score'),
+                    player1Name: document.getElementById('player1Name'),
+                    player2Name: document.getElementById('player2Name'),
+                    player1Info: document.getElementById('player1Info'),
+                    player2Info: document.getElementById('player2Info'),
+                    timer: document.getElementById('timer'),
+                    countdown: document.getElementById('countdown'),
+                    winnerText: document.getElementById('winnerText'),
+                    finalScore: document.getElementById('finalScore'),
+                    restartButton: document.getElementById('restartButton')
+                };
+            }
+
+            initEvents() {
+                // Mode selection
+                this.elements.onlineMode.addEventListener('click', () => this.selectMode('online'));
+                this.elements.aiMode.addEventListener('click', () => this.selectMode('ai'));
+                
+                // Online mode
+                this.elements.createRoomBtn.addEventListener('click', () => this.createRoom());
+                this.elements.joinRoomBtn.addEventListener('click', () => this.showJoinSection());
+                this.elements.confirmJoinBtn.addEventListener('click', () => this.joinRoom());
+                this.elements.roomIdDisplay.addEventListener('click', () => this.copyRoomId());
+                
+                // AI mode
+                this.elements.startAiBtn.addEventListener('click', () => this.startAIGame());
+                
+                // Game controls
+                this.elements.liftButton.addEventListener('click', () => this.playerLift());
+                this.elements.restartButton.addEventListener('click', () => this.restart());
+                
+                // Keyboard controls
+                document.addEventListener('keydown', (e) => {
+                    if (!this.gameActive) return;
+                    if (e.code === 'Space') {
+                        e.preventDefault();
+                        this.playerLift();
+                    }
+                });
+                
+                // Enter key shortcuts
+                this.elements.playerNameInput.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') this.createRoom();
+                });
+                
+                this.elements.roomIdInput.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') this.joinRoom();
+                });
+                
+                this.elements.aiPlayerName.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') {
+                        if (this.elements.aiOpponentName.value.trim()) {
+                            this.startAIGame();
+                        } else {
+                            this.elements.aiOpponentName.focus();
+                        }
+                    }
+                });
+                
+                this.elements.aiOpponentName.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') this.startAIGame();
+                });
+            }
+
+            selectMode(mode) {
+                this.gameMode = mode;
+                if (mode === 'online') {
+                    this.elements.onlineMode.classList.add('active');
+                    this.elements.aiMode.classList.remove('active');
+                    this.elements.onlineSection.style.display = 'block';
+                    this.elements.aiSection.style.display = 'none';
+                } else {
+                    this.elements.aiMode.classList.add('active');
+                    this.elements.onlineMode.classList.remove('active');
+                    this.elements.aiSection.style.display = 'block';
+                    this.elements.onlineSection.style.display = 'none';
+                }
+            }
+
+            showJoinSection() {
+                this.elements.joinSection.style.display = 'block';
+                this.elements.roomIdInput.focus();
+            }
+
+            createRoom() {
+                this.playerName = this.elements.playerNameInput.value.trim() || '玩家1';
+                this.isHost = true;
+                
+                // 创建 PeerJS 连接
+                this.peer = new Peer();
+                
+                this.peer.on('open', (id) => {
+                    this.roomId = id;
+                    this.elements.roomIdDisplay.textContent = id;
+                    this.elements.lobby.style.display = 'none';
+                    this.elements.waiting.style.display = 'block';
+                    this.elements.statusMessage.textContent = '房间已创建，等待玩家加入...';
+                });
+                
+                this.peer.on('connection', (connection) => {
+                    this.conn = connection;
+                    this.setupConnection();
+                });
+                
+                this.peer.on('error', (err) => {
+                    this.showError('连接错误：' + err.message);
+                });
+            }
+
+            joinRoom() {
+                const roomId = this.elements.roomIdInput.value.trim();
+                if (!roomId) {
+                    alert('请输入房间号！');
+                    return;
+                }
+                
+                this.playerName = this.elements.playerNameInput.value.trim() || '玩家2';
+                this.isHost = false;
+                this.roomId = roomId;
+                
+                this.elements.lobby.style.display = 'none';
+                this.elements.waiting.style.display = 'block';
+                this.elements.waitingTitle.textContent = '正在连接...';
+                this.elements.statusMessage.textContent = '正在连接到房间 ' + roomId;
+                
+                // 创建 PeerJS 连接
+                this.peer = new Peer();
+                
+                this.peer.on('open', () => {
+                    this.conn = this.peer.connect(roomId);
+                    this.setupConnection();
+                });
+                
+                this.peer.on('error', (err) => {
+                    this.showError('无法连接到房间，请检查房间号是否正确');
+                });
+            }
+
+            setupConnection() {
+                this.conn.on('open', () => {
+                    // 发送玩家信息
+                    this.conn.send({
+                        type: 'playerInfo',
+                        name: this.playerName
+                    });
+                    
+                    if (!this.isHost) {
+                        this.elements.statusMessage.textContent = '连接成功！等待主机开始游戏...';
+                    }
+                });
+                
+                this.conn.on('data', (data) => {
+                    this.handleMessage(data);
+                });
+                
+                this.conn.on('close', () => {
+                    if (this.gameActive) {
+                        this.showError('对手已断开连接');
+                        this.gameActive = false;
+                    }
+                });
+            }
+
+            handleMessage(data) {
+                switch(data.type) {
+                    case 'playerInfo':
+                        this.opponentName = data.name;
+                        this.elements.statusMessage.textContent = data.name + ' 已加入房间';
+                        if (this.isHost) {
+                            setTimeout(() => this.startOnlineGame(), 1000);
+                        }
+                        break;
+                        
+                    case 'gameStart':
+                        this.startOnlineGame();
+                        break;
+                        
+                    case 'lift':
+                        this.opponentScore = data.score;
+                        this.updateOpponentDisplay();
+                        break;
+                        
+                    case 'gameEnd':
+                        this.endGame();
+                        break;
+                }
+            }
+
+            startOnlineGame() {
+                if (this.isHost) {
+                    this.conn.send({ type: 'gameStart' });
+                }
+                
+                // 设置玩家信息
+                if (this.isHost) {
+                    this.elements.player1Name.textContent = this.playerName + ' (你)';
+                    this.elements.player2Name.textContent = this.opponentName;
+                    this.elements.player1Info.classList.add('current-player');
+                } else {
+                    this.elements.player1Name.textContent = this.opponentName;
+                    this.elements.player2Name.textContent = this.playerName + ' (你)';
+                    this.elements.player2Info.classList.add('current-player');
+                }
+                
+                this.elements.waiting.style.display = 'none';
+                this.elements.gameArea.style.display = 'block';
+                
+                this.showCountdown();
+            }
+
+            showCountdown() {
+                let count = 3;
+                this.elements.countdown.style.display = 'block';
+                this.elements.countdown.textContent = count;
+                
+                const countInterval = setInterval(() => {
+                    count--;
+                    if (count > 0) {
+                        this.elements.countdown.textContent = count;
+                        this.elements.countdown.style.animation = 'none';
+                        setTimeout(() => {
+                            this.elements.countdown.style.animation = 'pulse 1s ease-in-out';
+                        }, 10);
+                    } else if (count === 0) {
+                        this.elements.countdown.textContent = 'GO!';
+                        this.elements.countdown.style.animation = 'none';
+                        setTimeout(() => {
+                            this.elements.countdown.style.animation = 'pulse 1s ease-in-out';
+                        }, 10);
+                    } else {
+                        clearInterval(countInterval);
+                        this.elements.countdown.style.display = 'none';
+                        this.beginGame();
+                    }
+                }, 1000);
+            }
+
+            beginGame() {
+                this.gameActive = true;
+                this.myScore = 0;
+                this.opponentScore = 0;
+                this.timeLeft = 30;
+                
+                this.elements.liftButton.disabled = false;
+                this.updateScores();
+                this.startTimer();
+                
+                // 如果是AI模式，在游戏开始后启动AI
+                if (this.gameMode === 'ai') {
+                    this.startAI();
+                }
+            }
+
+            startTimer() {
+                this.timerInterval = setInterval(() => {
+                    this.timeLeft--;
+                    this.elements.timer.textContent = `剩余时间: ${this.timeLeft}秒`;
+                    
+                    if (this.timeLeft <= 5) {
+                        this.elements.timer.style.color = '#ff6b6b';
+                    }
+                    
+                    if (this.timeLeft <= 0) {
+                        this.endGame();
+                        if (this.gameMode === 'online' && this.conn) {
+                            this.conn.send({ type: 'gameEnd' });
+                        }
+                    }
+                }, 1000);
+            }
+
+            playerLift() {
+                if (!this.gameActive) return;
+                
+                this.myScore++;
+                
+                if (this.gameMode === 'online' && this.conn) {
+                    this.conn.send({
+                        type: 'lift',
+                        score: this.myScore
+                    });
+                }
+                
+                this.updateMyDisplay();
+                this.createClickEffect();
+            }
+
+            updateMyDisplay() {
+                if (this.isHost || this.gameMode === 'ai') {
+                    this.elements.player1Score.textContent = this.myScore;
+                    this.animateBar(this.elements.player1Bar, this.myScore);
+                } else {
+                    this.elements.player2Score.textContent = this.myScore;
+                    this.animateBar(this.elements.player2Bar, this.myScore);
+                }
+            }
+
+            updateOpponentDisplay() {
+                if (this.gameMode === 'ai') {
+                    // AI模式下，对手总是玩家2
+                    this.elements.player2Score.textContent = this.opponentScore;
+                    this.animateBar(this.elements.player2Bar, this.opponentScore);
+                } else if (this.isHost) {
+                    // 在线模式，主机视角
+                    this.elements.player2Score.textContent = this.opponentScore;
+                    this.animateBar(this.elements.player2Bar, this.opponentScore);
+                } else {
+                    // 在线模式，客户端视角
+                    this.elements.player1Score.textContent = this.opponentScore;
+                    this.animateBar(this.elements.player1Bar, this.opponentScore);
+                }
+            }
+
+            animateBar(bar, score) {
+                const height = Math.min(this.maxBarHeight, score * 5);
+                bar.style.height = height + 'px';
+                
+                bar.style.filter = 'brightness(1.5)';
+                setTimeout(() => {
+                    bar.style.filter = 'brightness(1)';
+                }, 100);
+            }
+
+            createClickEffect() {
+                this.elements.liftButton.style.transform = 'scale(0.95)';
+                setTimeout(() => {
+                    this.elements.liftButton.style.transform = 'scale(1)';
+                }, 100);
+            }
+
+            updateScores() {
+                if (this.gameMode === 'ai') {
+                    this.elements.player1Score.textContent = this.myScore;
+                    this.elements.player2Score.textContent = this.opponentScore;
+                }
+            }
+
+            // AI Mode Methods
+            startAIGame() {
+                this.playerName = this.elements.aiPlayerName.value.trim() || '玩家';
+                this.gameMode = 'ai';
+                this.isHost = true;
+                
+                // 使用自定义对手名称或随机生成
+                const customOpponentName = this.elements.aiOpponentName.value.trim();
+                if (customOpponentName) {
+                    this.opponentName = customOpponentName;
+                } else {
+                    const aiNames = ['小明', '大力士', '抬杠王', '肌肉侠', '钢铁侠', '绿巨人', '超人', '闪电侠', '蜘蛛侠', '金刚狼'];
+                    this.opponentName = aiNames[Math.floor(Math.random() * aiNames.length)];
+                }
+                
+                this.elements.player1Name.textContent = this.playerName + ' (你)';
+                this.elements.player2Name.textContent = this.opponentName + ' (电脑)';
+                this.elements.player1Info.classList.add('current-player');
+                
+                this.elements.lobby.style.display = 'none';
+                this.elements.gameArea.style.display = 'block';
+                
+                this.showCountdown();
+            }
+
+            startAI() {
+                // 清除之前的AI interval（如果存在）
+                if (this.aiInterval) {
+                    clearInterval(this.aiInterval);
+                }
+                
+                // AI 行为参数
+                let aiClickCount = 0;
+                let targetScore = 0;
+                
+                // 计算AI的目标分数（比玩家少一点）
+                const calculateTargetScore = () => {
+                    // 根据时间计算预期的玩家点击速度
+                    const expectedPlayerSpeed = 3.5; // 预期玩家每秒点击3.5次
+                    const timeElapsed = 30 - this.timeLeft;
+                    const expectedPlayerScore = timeElapsed * expectedPlayerSpeed;
+                    
+                    // AI目标：比玩家少5-15%
+                    const randomFactor = 0.85 + Math.random() * 0.1; // 0.85-0.95
+                    targetScore = Math.floor(expectedPlayerScore * randomFactor);
+                    
+                    // 确保不会负数
+                    targetScore = Math.max(0, targetScore);
+                };
+                
+                // AI主循环
+                this.aiInterval = setInterval(() => {
+                    if (!this.gameActive) {
+                        clearInterval(this.aiInterval);
+                        return;
+                    }
+                    
+                    calculateTargetScore();
+                    
+                    // 根据当前分数和目标分数决定是否点击
+                    if (this.opponentScore < targetScore) {
+                        // 需要追赶
+                        const catchUpSpeed = Math.min(3, targetScore - this.opponentScore);
+                        for (let i = 0; i < catchUpSpeed; i++) {
+                            setTimeout(() => {
+                                if (!this.gameActive) return;
+                                this.opponentScore++;
+                                this.updateOpponentDisplay();
+                            }, i * 50);
+                        }
+                    } else if (this.opponentScore > targetScore + 5) {
+                        // 领先太多，暂停一下
+                        // 不做任何事
+                    } else {
+                        // 正常速度点击
+                        if (Math.random() < 0.7) { // 70%概率点击
+                            this.opponentScore++;
+                            this.updateOpponentDisplay();
+                        }
+                    }
+                    
+                    // 游戏最后5秒，故意放慢
+                    if (this.timeLeft <= 5) {
+                        // 确保玩家能赢
+                        if (this.opponentScore >= this.myScore - 2) {
+                            // AI已经很接近了，大幅放慢
+                            if (Math.random() < 0.2) { // 只有20%概率点击
+                                this.opponentScore++;
+                                this.updateOpponentDisplay();
+                            }
+                        }
+                    }
+                    
+                }, 200); // 每200ms执行一次
+            }
+
+            endGame() {
+                this.gameActive = false;
+                clearInterval(this.timerInterval);
+                
+                // 清除AI interval
+                if (this.aiInterval) {
+                    clearInterval(this.aiInterval);
+                    this.aiInterval = null;
+                }
+                
+                this.elements.liftButton.disabled = true;
+                
+                let winner = '';
+                let playerScore, opponentScore;
+                
+                if (this.gameMode === 'ai' || this.isHost) {
+                    playerScore = this.myScore;
+                    opponentScore = this.opponentScore;
+                } else {
+                    playerScore = this.myScore;
+                    opponentScore = this.opponentScore;
+                }
+                
+                if (playerScore > opponentScore) {
+                    winner = this.playerName + ' 获胜！🎉';
+                    this.elements.winnerText.style.color = '#ffd700';
+                } else if (opponentScore > playerScore) {
+                    winner = this.opponentName + ' 获胜！';
+                    this.elements.winnerText.style.color = '#ff6b6b';
+                } else {
+                    winner = '平局！';
+                    this.elements.winnerText.style.color = '#4ecdc4';
+                }
+                
+                this.elements.winnerText.textContent = winner;
+                this.elements.finalScore.textContent = 
+                    `${this.playerName}: ${playerScore} 次 | ${this.opponentName}: ${opponentScore} 次`;
+                
+                setTimeout(() => {
+                    this.elements.gameOver.style.display = 'block';
+                }, 500);
+            }
+
+            copyRoomId() {
+                const roomId = this.elements.roomIdDisplay.textContent;
+                navigator.clipboard.writeText(roomId).then(() => {
+                    const originalText = this.elements.roomIdDisplay.textContent;
+                    this.elements.roomIdDisplay.textContent = '已复制！';
+                    setTimeout(() => {
+                        this.elements.roomIdDisplay.textContent = originalText;
+                    }, 1000);
+                });
+            }
+
+            showError(message) {
+                alert(message);
+                this.restart();
+            }
+
+            restart() {
+                // 清理连接
+                if (this.conn) {
+                    this.conn.close();
+                    this.conn = null;
+                }
+                if (this.peer) {
+                    this.peer.destroy();
+                    this.peer = null;
+                }
+                
+                // 清除AI interval
+                if (this.aiInterval) {
+                    clearInterval(this.aiInterval);
+                    this.aiInterval = null;
+                }
+                
+                // 重置状态
+                this.gameActive = false;
+                this.myScore = 0;
+                this.opponentScore = 0;
+                this.timeLeft = 30;
+                clearInterval(this.timerInterval);
+                
+                // 重置UI
+                this.elements.gameOver.style.display = 'none';
+                this.elements.gameArea.style.display = 'none';
+                this.elements.waiting.style.display = 'none';
+                this.elements.lobby.style.display = 'block';
+                this.elements.joinSection.style.display = 'none';
+                
+                // 重置样式
+                this.elements.timer.style.color = 'white';
+                this.elements.player1Bar.style.height = '10px';
+                this.elements.player2Bar.style.height = '10px';
+                this.elements.player1Info.classList.remove('current-player');
+                this.elements.player2Info.classList.remove('current-player');
+                
+                // 清空输入
+                this.elements.roomIdInput.value = '';
+                this.elements.aiOpponentName.value = '';
+                
+                this.updateScores();
+            }
+        }
+
+        // 启动游戏
+        const game = new TaigangOnlineGame();
+    </script>
+</body>
+</html>
